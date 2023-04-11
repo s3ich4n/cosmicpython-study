@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "cosmic-python"
+version = "0.1.0"
+description = ""
+authors = ["Seongeun Yu <s3ich4n@gmail.com>"]
+readme = "README.md"
+packages = [{include = "cosmic_python"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pytest = "^7.3.0"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.3.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
