@@ -1,7 +1,7 @@
 import abc
 from typing import List
 
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -72,4 +72,7 @@ class SqlAlchemyRepository(AbstractRepository):
         )
 
     async def delete_batch(self, batch: model.Batch):
-        await self.session.delete(batch)
+        await self.session.execute(
+            delete(model.Batch)
+            .filter(model.Batch.reference == batch.reference)
+        )

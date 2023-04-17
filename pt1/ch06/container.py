@@ -16,5 +16,5 @@ class Container(containers.DeclarativeContainer):
 
     allocation_uow = providers.Factory(
         SqlAlchemyUnitOfWork,
-        db.provided.init_session_factory,
+        session_factory=db.provided.session_factory,
     )

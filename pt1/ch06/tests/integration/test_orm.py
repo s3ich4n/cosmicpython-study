@@ -29,19 +29,27 @@ async def test_orderline_mapper_can_load_lines(session):
 
 
 @pytest.mark.asyncio
-async def test_orderline_mapper_can_save_lines(session):
+async def test_orderline_mapper_can_save_lines(
+        session,
+        clear,
+):
     new_line = model.OrderLine("order1", "DECORATIVE-WIDGET", 12)
     session.add(new_line)
     await session.commit()
 
     rows = list(
-        await session.execute(text('SELECT orderid, sku, qty FROM "order_lines"'))
+        await session.execute(
+            text('SELECT orderid, sku, qty FROM "order_lines"')
+        )
     )
     assert rows == [("order1", "DECORATIVE-WIDGET", 12)]
 
 
 @pytest.mark.asyncio
-async def test_retrieving_batches(session: AsyncSession):
+async def test_retrieving_batches(
+        session,
+        clear,
+):
     await session.execute(
         text(
             "INSERT INTO batches (reference, sku, purchased_quantity, eta)"
@@ -63,7 +71,10 @@ async def test_retrieving_batches(session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_saving_batches(session):
+async def test_saving_batches(
+        session,
+        clear,
+):
     batch = model.Batch("batch1", "sku1", 100, eta=None)
     session.add(batch)
     await session.commit()
@@ -75,7 +86,10 @@ async def test_saving_batches(session):
 
 
 @pytest.mark.asyncio
-async def test_saving_allocations(session):
+async def test_saving_allocations(
+        session,
+        clear,
+):
     batch = model.Batch("batch1", "sku1", 100, eta=None)
     line = model.OrderLine("order1", "sku1", 10)
     batch.allocate(line)
@@ -83,20 +97,29 @@ async def test_saving_allocations(session):
     await session.commit()
 
     rows = list(
-        await session.execute(text('SELECT orderline_id, batch_id FROM "allocations"'))
+        await session.execute(
+            text('SELECT batch_id, orderline_id FROM "allocations"')
+        )
     )
     assert rows == [(batch.id, line.id)]
 
 
 @pytest.mark.asyncio
-async def test_retrieving_allocations(session):
+async def test_retrieving_allocations(
+        session,
+        clear,
+):
     await session.execute(
         text(
-            'INSERT INTO order_lines (orderid, sku, qty) VALUES ("order1", "sku1", 12)'
+            'INSERT INTO order_lines (orderid, sku, qty)'
+            ' VALUES ("order1", "sku1", 12)'
         )
     )
     [[olid]] = await session.execute(
-        text("SELECT id FROM order_lines WHERE orderid=:orderid AND sku=:sku"),
+        text(
+            "SELECT id FROM order_lines"
+            " WHERE orderid=:orderid AND sku=:sku"
+        ),
         dict(orderid="order1", sku="sku1"),
     )
     await session.execute(

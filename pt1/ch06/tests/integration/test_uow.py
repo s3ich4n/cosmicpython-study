@@ -10,30 +10,43 @@ from pt1.ch06.tests.integration.conftest import (
 
 
 @pytest.mark.asyncio
-async def test_uow_can_retrieve_a_batch_and_allocate_to_it(session_factory):
-    session = session_factory()
-    insert_batch(session, 'batch1', 'HIPSTER-WORKBENCH', 100, None)
-    session.commit()
+async def test_uow_can_retrieve_a_batch_and_allocate_to_it(
+        async_session_maker,
+        clear,
+):
+    session = async_session_maker()
+    await insert_batch(session, 'batch1', 'HIPSTER-WORKBENCH', 100, None)
+    await session.commit()
 
-    uow = unit_of_work.SqlAlchemyUnitOfWork(session_factory)
+    uow = unit_of_work.SqlAlchemyUnitOfWork(async_session_maker)
 
-    with uow:
-        batch = uow.batches.get(reference='batch1')
+    async with uow:
+        batch = await uow.batches.get(reference='batch1')
         line = model.OrderLine('o1', 'HIPSTER-WORKBENCH', 10)
         batch.allocate(line)
-        uow.commit()
+        await uow.commit()
 
-    batchref = get_allocated_batch_ref(session, 'o1', 'HIPSTER-WORKBENCH')
+    batchref = await get_allocated_batch_ref(session, 'o1', 'HIPSTER-WORKBENCH')
     assert batchref == 'batch1'
 
 
 @pytest.mark.asyncio
-async def test_rolls_back_uncommitted_work_by_default(session_factory):
-    uow = unit_of_work.SqlAlchemyUnitOfWork(session_factory)
-    async with uow:
-        insert_batch(uow._session, 'batch1', 'MEDIUM-PLINTH', 100, None)
+async def test_rolls_back_uncommitted_work_by_default(
+        async_session_maker,
+        clear,
+):
+    session = async_session_maker()
+    await insert_batch(session, 'batch1', 'MEDIUM-PLINTH', 100, None)
+    # await session.commit()    커밋을 하지 않는 것을 테스트!
 
-    new_session = session_factory()
+    uow = unit_of_work.SqlAlchemyUnitOfWork(async_session_maker)
+
+    async with uow:
+        batch = await uow.batches.get(reference='batch1')
+        line = model.OrderLine('o1', 'HIPSTER-WORKBENCH', 10)
+        batch.allocate(line)
+
+    new_session = async_session_maker()
     rows = list(
         await new_session.execute(text('SELECT * FROM batches'))
     )
@@ -41,17 +54,20 @@ async def test_rolls_back_uncommitted_work_by_default(session_factory):
 
 
 @pytest.mark.asyncio
-async def test_rolls_back_on_error(session_factory):
+async def test_rolls_back_on_error(
+        async_session_maker,
+        clear,
+):
     class MyException(Exception):
         pass
 
-    uow = unit_of_work.SqlAlchemyUnitOfWork(session_factory)
+    uow = unit_of_work.SqlAlchemyUnitOfWork(async_session_maker)
     with pytest.raises(MyException):
         async with uow:
-            insert_batch(uow._session, 'batch1', 'MEDIUM-PLINTH', 100, None)
+            await insert_batch(uow.session, 'batch1', 'MEDIUM-PLINTH', 100, None)
             raise MyException()
 
-    new_session = session_factory()
+    new_session = async_session_maker()
     rows = list(
         await new_session.execute(text('SELECT * FROM batches'))
     )

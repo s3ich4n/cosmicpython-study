@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from pt1.ch06.allocation.adapters.orm import start_mappers
 from pt1.ch06.allocation.adapters.postgres import AsyncSQLAlchemy
 from pt1.ch06.container import Container
-from pt1.ch06.allocation.entrypoints import app
+from pt1.ch06.allocation.entrypoints.app import app
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -46,29 +46,39 @@ async def test_client() -> AsyncClient:
             yield client
 
 
+@pytest_asyncio.fixture(scope="session", autouse=True)
+def mapper():
+    start_mappers()
+
+
 @pytest_asyncio.fixture(scope="session", name="async_engine")
 async def async_engine_maker(rdbms):
-    await rdbms.connect()
+    await rdbms.connect(echo=True)
     await rdbms.create_database()
-    start_mappers()
     yield
     await rdbms.disconnect()
 
 
-@pytest_asyncio.fixture(name="session")
-async def get_async_session(
+@pytest_asyncio.fixture(scope="session", name="async_session_maker")
+async def get_async_session_maker(
         rdbms,
         async_engine,
 ):
     _async_session_maker = async_scoped_session(
         sessionmaker(
-            autocommit=False,
-            autoflush=False,
-            bind=rdbms.engine,
+            rdbms.engine,
+            expire_on_commit=False,
             class_=AsyncSession,
         ),
         scopefunc=current_task,
     )
 
-    async with _async_session_maker() as _session:
+    yield _async_session_maker
+
+
+@pytest_asyncio.fixture(name="session")
+async def get_async_session(
+        async_session_maker,
+):
+    async with async_session_maker() as _session:
         yield _session

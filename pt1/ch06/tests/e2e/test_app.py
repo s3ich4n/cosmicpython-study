@@ -1,6 +1,5 @@
 from dataclasses import asdict
 
-import httpx
 import pytest
 from fastapi import status
 
@@ -12,32 +11,32 @@ from pt1.ch06.tests.e2e.conftest import (
 )
 
 
-async def post_to_add_batch(ref, sku, qty, eta):
-    async with httpx.AsyncClient() as client:
-        r = await client.post(
-            "http://localhost:13370/batches",
-            json={
-                'ref': ref,
-                'sku': sku,
-                'qty': qty,
-                'eta': eta,
-            },
-        )
-        assert r.status_code == 201
+async def post_to_add_batch(client, ref, sku, qty, eta):
+    r = await client.post(
+        "http://localhost:13370/batches",
+        json={
+            'ref': ref,
+            'sku': sku,
+            'qty': qty,
+            'eta': eta,
+        },
+    )
+    assert r.status_code == 201
 
 
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_happy_path_returns_201_and_allocated_batch(
+        async_engine,
         client,
 ):
     sku, othersku = random_sku(), random_sku('other')
     earlybatch = random_batchref(1)
     laterbatch = random_batchref(2)
     otherbatch = random_batchref(3)
-    await post_to_add_batch(laterbatch, sku, 100, '2023-04-14')
-    await post_to_add_batch(earlybatch, sku, 100, '2023-04-13')
-    await post_to_add_batch(otherbatch, othersku, 100, None)
+    await post_to_add_batch(client, laterbatch, sku, 100, '2023-04-14')
+    await post_to_add_batch(client, earlybatch, sku, 100, '2023-04-13')
+    await post_to_add_batch(client, otherbatch, othersku, 100, None)
 
     data = OrderLine(
         orderid=random_orderid(),
@@ -72,17 +71,14 @@ async def test_should_raise_out_of_stock_when_batch_is_invalid(
 @pytest.mark.integration
 async def test_api_do_deallocate(
         client,
-        add_stock,
 ):
     sku, othersku = random_sku(), random_sku('other')
     earlybatch = random_batchref(1)
     laterbatch = random_batchref(2)
     otherbatch = random_batchref(3)
-    await add_stock([
-        (laterbatch, sku, 100, '2023-04-14'),
-        (earlybatch, sku, 100, '2023-04-13'),
-        (otherbatch, othersku, 100, None),
-    ])
+    await post_to_add_batch(client, laterbatch, sku, 100, '2023-04-14')
+    await post_to_add_batch(client, earlybatch, sku, 100, '2023-04-13')
+    await post_to_add_batch(client, otherbatch, othersku, 100, None)
 
     data = OrderLine(
         orderid=random_orderid(),

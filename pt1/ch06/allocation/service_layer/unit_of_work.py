@@ -22,11 +22,14 @@ class AbstractUnitOfWork(abc.ABC):
 
 
 class SqlAlchemyUnitOfWork(AbstractUnitOfWork):
-    def __init__(self, session_factory):
+    def __init__(
+            self,
+            session_factory,
+    ):
         self._session_factory = session_factory
 
     async def __aenter__(self):
-        self.session = self._session_factory() # type: AsyncSession
+        self.session = self._session_factory()  # type: AsyncSession
         self.batches = repository.SqlAlchemyRepository(self.session)
         return await super().__aenter__()
 
