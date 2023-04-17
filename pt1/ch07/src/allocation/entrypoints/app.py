@@ -1,12 +1,12 @@
-from dependency_injector.wiring import inject, Provide
-from fastapi import FastAPI, HTTPException, status, Depends
+from dependency_injector.wiring import inject
+from fastapi import FastAPI, HTTPException, status
 
-from pt1.ch06.allocation.adapters import orm
-from pt1.ch06.allocation.entrypoints import BatchRequest, OrderLineRequest
-from pt1.ch06.config import Settings
-from pt1.ch06.container import Container
-from pt1.ch06.allocation.service_layer import services, unit_of_work
-from pt1.ch06.allocation.domain import model
+from pt1.ch07.src.allocation.entrypoints import BatchRequest, OrderLineRequest
+from pt1.ch07.config import Settings
+from pt1.ch07.container import Container
+from pt1.ch07.src.allocation.service_layer import services
+from pt1.ch07.src.allocation.service_layer import unit_of_work
+from pt1.ch07.src.allocation.domain import model
 
 
 # TODO
@@ -42,7 +42,6 @@ async def on_shutdown():
 async def add_batch(
         batch: BatchRequest,
 ):
-    # FIXME
     await services.add_batch(
         ref=batch.ref,
         sku=batch.sku,
