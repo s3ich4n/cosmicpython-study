@@ -9,63 +9,46 @@ from pt1.ch07.src.allocation.domain import model
 
 
 class AbstractRepository(abc.ABC):
-
     @abc.abstractmethod
-    async def add(self, batch: model.Batch):
+    async def add(self, product: model.Product):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get(self, reference) -> model.Batch:
+    async def get(self, sku) -> model.Product:
         raise NotImplementedError
-
-
-class FakeRepository(AbstractRepository):
-    def __init__(self, batches):
-        self._batches = set(batches)
-
-    def add(self, batch):
-        self._batches.add(batch)
-
-    def get(self, reference):
-        return next(b for b in self._batches if b.reference == reference)
-
-    def list(self):
-        return list(self._batches)
 
 
 class SqlAlchemyRepository(AbstractRepository):
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def add(self, batch: model.Batch):
+    async def add(self, product: model.Product):
         """ Batch 객체를 Persistent store에 저장한다.
 
         sqlalchemy의 add를 호출해서 그런가?
 
-        :param batch:
-        :return:
         """
-        self.session.add(batch)
+        self.session.add(product)
 
-    async def get(self, reference) -> model.Batch:
+    async def get(self, sku: str) -> model.Product:
         return (
             (
                 await self.session.execute(
-                    select(model.Batch)
-                    .options(selectinload(model.Batch.allocations))
-                    .filter_by(reference=reference)
+                    select(model.Product)
+                    .options(selectinload(model.Product.batches))
+                    .filter(model.Product.sku == sku)
                 )
             )
             .scalars()
             .one_or_none()
         )
 
-    async def list(self) -> List[model.Batch]:
+    async def list(self) -> List[model.Product]:
         return (
             (
                 await self.session.scalars(
-                    select(model.Batch)
-                    .options(selectinload(model.Batch.allocations))
+                    select(model.Product)
+                    .options(selectinload(model.Product.batches))
                 )
             )
             .all()
@@ -73,6 +56,6 @@ class SqlAlchemyRepository(AbstractRepository):
 
     async def delete_batch(self, batch: model.Batch):
         await self.session.execute(
-            delete(model.Batch)
-            .filter(model.Batch.reference == batch.reference)
+            delete(model.Product)
+            .filter(model.Product.sku == batch.sku)
         )

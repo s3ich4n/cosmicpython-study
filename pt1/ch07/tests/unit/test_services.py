@@ -13,9 +13,43 @@ tomorrow = today + timedelta(days=1)
 later = tomorrow + timedelta(minutes=1)
 
 
+class FakeRepository(repository.AbstractRepository):
+    def __init__(
+            self,
+            products,
+    ):
+        self._products = set(products)
+
+    async def add(self, products):
+        self._products.add(products)
+
+    async def get(self, sku):
+        return next((b for b in self._products if b.sku == sku), None)
+
+    async def list(self):
+        return list(self._products)
+
+    @staticmethod
+    def for_batch(ref, sku, qty, eta=None):
+        batch = model.Batch(ref, sku, qty, eta=None)
+        return FakeRepository(
+            [model.Product(sku, [batch, ])]
+        )
+
+    @staticmethod
+    def for_diff_batches(ref, sku, qty, eta_delta):
+        batches = [
+            model.Batch(ref[0], sku, qty, eta=today),
+            model.Batch(ref[1], sku, qty, eta=today + timedelta(eta_delta)),
+        ]
+        return FakeRepository(
+            [model.Product(sku, batches)]
+        )
+
+
 class FakeUnitOfWork(unit_of_work.AbstractUnitOfWork):
     def __init__(self):
-        self.batches = FakeRepository([])
+        self.products = FakeRepository([])
         self.committed = False
 
     async def commit(self):
@@ -25,48 +59,12 @@ class FakeUnitOfWork(unit_of_work.AbstractUnitOfWork):
         pass
 
 
-class FakeRepository(repository.AbstractRepository):
-    def __init__(self, batches):
-        self._batches = set(batches)
-
-    async def add(self, batch):
-        self._batches.add(batch)
-
-    async def get(self, reference):
-        return next(b for b in self._batches if b.reference == reference)
-
-    async def list(self):
-        return list(self._batches)
-
-    @staticmethod
-    def for_batch(ref, sku, qty, eta=None):
-        return FakeRepository([
-            model.Batch(ref, sku, qty, eta=None),
-        ])
-
-    @staticmethod
-    def for_diff_batches(ref, sku, qty, eta_delta):
-        batches = [
-            model.Batch(ref[0], sku, qty, eta=today),
-            model.Batch(ref[1], sku, qty, eta=today + timedelta(eta_delta)),
-        ]
-        return FakeRepository(batches)
-
-
-class FakeSession:
-    committed = False
-
-    async def commit(self):
-        self.committed = True
-
-
 @pytest.mark.asyncio
 async def test_add_batch():
     uow = FakeUnitOfWork()
     await services.add_batch("b1", "CRUNCHY-ARMCHAIR", 100, eta=None, uow=uow)
 
-    assert await uow.batches.get("b1") is not None
-
+    assert await uow.products.get("CRUNCHY-ARMCHAIR") is not None
     assert uow.committed
 
 
@@ -76,7 +74,6 @@ async def test_returns_allocation():
     await services.add_batch("b1", "COMPLICATED-LAMP", 100, eta=None, uow=uow)
 
     result = await services.allocate("o1", "COMPLICATED-LAMP", 10, uow)
-
     assert result == "b1"
 
 
@@ -103,7 +100,8 @@ async def test_deallocate():
     uow = FakeUnitOfWork()
 
     await services.add_batch("o1", "DEALLOC-TEST", 10, eta=None, uow=uow)
-    batch = await uow.batches.get("o1")
+    product = await uow.products.get("DEALLOC-TEST")
+    batch = product.batches[0]
 
     result = await services.allocate(
         orderid="o1",
@@ -130,8 +128,9 @@ async def test_prefers_current_stock_batches_to_shipments():
     await services.add_batch(shipment_batch, "RETRO-CLOCK", 100, eta=None, uow=uow)
     await services.allocate("oref", "RETRO-CLOCK", 10, uow)
 
-    in_stock_batch = await uow.batches.get(in_stock_batch)
+    product = await uow.products.get("RETRO-CLOCK")
+    in_stock_batch = product.get_allocation(in_stock_batch)
     assert in_stock_batch.available_quantity == 90
 
-    shipment_batch = await uow.batches.get(shipment_batch)
+    shipment_batch = product.get_allocation(shipment_batch)
     assert shipment_batch.available_quantity == 100

@@ -15,6 +15,7 @@ async def reset_table(session):
     await session.execute(text("DELETE FROM order_lines"))
     await session.execute(text("DELETE FROM batches"))
     await session.execute(text("DELETE FROM allocations"))
+    await session.execute(text("DELETE FROM products"))
     await session.commit()
 
 
@@ -33,6 +34,24 @@ async def insert_order_line(session, order_id, sku):
     )
     await session.commit()
     return orderline_id
+
+
+async def insert_product(session, sku):
+    await session.execute(
+        text(
+            "INSERT INTO products (sku)"
+            " VALUES (:sku)"
+        ),
+        dict(sku=sku),
+    )
+    [[product_sku]] = await session.execute(
+        text(
+            'SELECT sku FROM products'
+            ' WHERE sku=:sku'
+        ),
+        dict(sku=sku),
+    )
+    return product_sku
 
 
 async def insert_batch(session, ref, sku, qty, eta):

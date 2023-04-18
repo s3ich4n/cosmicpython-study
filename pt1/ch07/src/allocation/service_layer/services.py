@@ -14,16 +14,16 @@ async def add_batch(
         sku: str,
         qty: int,
         eta: Optional[date],
-        uow: unit_of_work.AbstractUnitOfWork
+        uow: unit_of_work.AbstractUnitOfWork,
 ):
     async with uow:
-        product = uow.products.get(sku=sku)
+        product = await uow.products.get(sku=sku)
 
         if product is None:
             product = model.Product(sku=sku, batches=[])
-            uow.products.add(product)
+            await uow.products.add(product)
 
-        await product.batches.add(model.Batch(ref, sku, qty, eta))
+        product.batches.append(model.Batch(ref, sku, qty, eta))
         await uow.commit()
 
 
@@ -31,7 +31,7 @@ async def allocate(
         orderid: str,
         sku: str,
         qty: int,
-        uow: unit_of_work.AbstractUnitOfWork
+        uow: unit_of_work.AbstractUnitOfWork,
 ) -> str:
     line = model.OrderLine(orderid, sku, qty)
 
@@ -53,11 +53,12 @@ async def deallocate(
         uow: unit_of_work.AbstractUnitOfWork,
 ):
     line = model.OrderLine(orderid, sku, qty)
+
     async with uow:
-        product = await uow.products.list()
+        product = await uow.products.get(sku=line.sku)
 
         if product is None:
             raise InvalidSku(f'Invalid sku {line.sku}')
 
-        model.deallocate(line, product)
+        product.deallocate(line)
         await uow.commit()

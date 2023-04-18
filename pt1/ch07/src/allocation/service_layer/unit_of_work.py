@@ -5,7 +5,7 @@ from pt1.ch07.src.allocation.adapters import repository
 
 
 class AbstractUnitOfWork(abc.ABC):
-    products: repository.AbstractProductRepository
+    batches: repository.AbstractRepository
 
     async def __aenter__(self) -> 'AbstractUnitOfWork':
         return self
@@ -31,7 +31,7 @@ class SqlAlchemyUnitOfWork(AbstractUnitOfWork):
 
     async def __aenter__(self):
         self.session = self._session_factory()  # type: AsyncSession
-        self.batches = repository.SqlAlchemyRepository(self.session)
+        self.products = repository.SqlAlchemyRepository(self.session)
         return await super().__aenter__()
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -43,13 +43,3 @@ class SqlAlchemyUnitOfWork(AbstractUnitOfWork):
 
     async def rollback(self):
         await self.session.rollback()
-
-
-class AbstractProductRepository(abc.ABC):
-    @abc.abstractmethod
-    async def get(self, reference) -> List['Product']:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    async def add(self, product: 'Product'):
-        raise NotImplementedError

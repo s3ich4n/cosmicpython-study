@@ -39,7 +39,7 @@ async def on_shutdown():
     status_code=status.HTTP_201_CREATED,
 )
 @inject
-async def add_batch(
+async def add_batch_endpoint(
         batch: BatchRequest,
 ):
     await services.add_batch(

@@ -24,8 +24,7 @@ async def test_orderline_mapper_can_load_lines(session):
         model.OrderLine("order1", "RED-TABLE", 13),
         model.OrderLine("order2", "BLUE-LIPSTICK", 14),
     ]
-    assert (await session.execute(select(
-        model.OrderLine))).scalars().all() == expected
+    assert (await session.execute(select(model.OrderLine))).scalars().all() == expected
 
 
 @pytest.mark.asyncio
@@ -67,8 +66,7 @@ async def test_retrieving_batches(
         model.Batch("batch1", "sku1", 100, eta=None),
         model.Batch("batch2", "sku2", 200, eta=date(2011, 4, 11)),
     ]
-    assert (await session.execute(select(
-        model.Batch))).scalars().all() == expected
+    assert (await session.execute(select(model.Batch))).scalars().all() == expected
 
 
 @pytest.mark.asyncio
@@ -141,8 +139,8 @@ async def test_retrieving_allocations(
     batch = (
         (
             await session.execute(
-                select(model.Batch).options(selectinload(
-                    model.Batch.allocations))
+                select(model.Batch)
+                .options(selectinload(model.Batch.allocations))
             )
         )
         .scalars()
