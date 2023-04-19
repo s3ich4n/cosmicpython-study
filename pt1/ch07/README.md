@@ -265,7 +265,7 @@ async def deallocate(
 - 어쩌면 배치를 지역/창고별로 나눠야할 수도 있다
 - 아니면 선적이라는 개념을 중심으로 데이터 접근전략을 재설계 해야할 수도 있다
 
-애그리게이트 패턴은 일관성과 성능을 중심으로 여러 기술적 제약사항을 관리하는데 도움이 되도록 설계된 패턴이다. 올바른 애그리게이트가 **하나만 있는 것은 아니다**. 설정한 경계가 성능을 떨어뜨린다면 언제든 설계를 다시 할 준비를 하자. 바꿔도 좋다. 언제든 바꿀 수 있다고 생각하고, 또 이게 편하다고 느껴야 한다.
+애그리게이트 패턴은 일관성과 성능을 중심으로 여러 기술적 제약사항을 관리하는데 도움이 되도록 설계된 패턴이다. 올바른 애그리게이트가 **하나만 있는 것은 아니다**. 설정한 경계가 성능을 떨어뜨린다면 **언제든 설계를 다시** 할 준비를 하자. **바꿔도 좋다. 언제든 바꿀 수 있다고 생각하고, 또 이게 편하다고 느껴야 한다.**
 
 # 7.7 버전 번호와 낙관적 동시성
 
@@ -278,10 +278,267 @@ DB 수준에서 데이터 일관성을 강제할 수 있는 방법을 더 살펴
 ***코드를 절대 프로덕션에 복붙하지 마시오.***
 > 
 
----
+전체 `batches` 테이블에 락걸고 싶지는 않고 특정 SKU에 해당하는 행에만 lock을 걸 수 있을까?
 
-[^1]: 왠지 [이 책의 3장](http://www.yes24.com/Product/Goods/114667254)을 다시 읽어봐야할 것 같은 느낌이다. 저기서 본 내용들의 일부가 여기도 나온다.
+한가지 답은 Product 모델 속성 하나를 사용해 전체 상태 변경이 완료되었는지 표시하고, 여러 동시성 작업자들이 이 속성을 획득하기 위해 경쟁하는 자원으로 활용하는 방법이다. 두 트랜잭션이 `batches` 에 대한 세계 상태를 동시에 읽고 둘 다 `allocation` 테이블을 업데이트 하려고 한다면, 각 트랜잭션이 `product_table` 에 있는 `version_number` 를 업데이트하도록 강제할 수 있다. 이러면 경쟁하는 트랜잭션 중 하나만 승리하고, 세계가 일관성 있게 남게 된다.
+
+![두 트랜잭션 예시:  `Product` 에 동시 업데이트를 시도하는 시퀀스 다이어그램]([https://www.cosmicpython.com/book/images/apwp_0704.png](https://www.cosmicpython.com/book/images/apwp_0704.png))
+
+- 둘 다 버전 `3`을 가져간다
+- 모델에 allocate을 하면 버전 `4`를 담고있는 Product 객체가 생긴다
+    - 해당 객체를 먼저 커밋한 사항이 반영된다
+    - 늦게 커밋한 사람은 버전이 안맞아서 못 한다. 혹은 다시 하거나
+
+## 낙관적 동시성 제어와 재시도
+
+> *어쨌거나 성능과 충돌 가능성을 측정 후 어떤 정책을 가져가야 할지 평가해야 한다.*
+> 
+1. 낙관적/비관적 동시성 제어에 대해
+    - 낙관적 동시성 제어(*Optimistic Concurrency Control*)
+        - 여러 사용자의 DB 변경 충돌이 *드물 것이다* 라고 생각한다
+        - 일단 업데이트 하고 문제 시 통지받을 수 있는 방법이 있는지만 확실히 한다
+        - 충돌 발생 시 어떻게 처리해야 할지 명시해야 한다
+    - 비관적(*pessimistic*) 동시성 제어
+        - 여러 사용자의 DB 변경 충돌이 *잦을 것이다* 라고 가정한다
+        - 모든 충돌을 피하려 노력하고, 안전성을 위해 모든 대상을 lock을 사용해 잠근다
+        - 실패 처리는 DB가 해줘서 고민할 필요는 없지만, deadlock을 고민해봐야 한다
+        - E.g.,
+            - `batches` 테이블 전체를 lock 걸거나, `SELECT FOR UPDATE` 를 사용한다.
+2. 실패 처리에 대한 방안
+    1. 실패한 연산을 처음부터 다시 함
+        1. 두 트랜잭션 예시에서 실패한 쪽은 다시 요청해서 결과를 받아본다
+
+## 7.7.1 버전 번호를 구현하는 방법
+
+1. 도메인의 `version_number` 를 사용
+    1. 해당 값을 `Product` 생성자에 추가하고 `Product.allocate()` 가 버전 번호를 올리는 경우
+2. 서비스 계층이 수행
+    1. (근거) 버전 번호는 도메인의 관심사가 아니기 때문이다
+    2. 따라서 서비스 계층에서 `Product` 에 저장소를 통해 버전번호를 덧붙이고, `commit()` 전에 버전 번호를 증가한다고 가정할 수 있다
+3. 인프라와 측에서 사용(controversial)
+    1. (근거) 버전 번호는 결국 인프라와 관련있다
+    2. 따라서 UoW와 저장소가 처리한다
+        1. 저장소는 자신이 읽어 온 상품의 모든 버전 번호에 접근 가능하다
+        2. UoW는 상품이 변경됐다는 가정 하에 자신이 아는 상품의 버전 번호를 증가할 수 있다
+
+3번 방법은 “모든” 제품이 변경되었다고 가정하지 않고서는 구현할 방법이 없다.
+
+2번 방법은 상태 변경에 대한 책임이 서비스-도메인 계층 사이에 있어서 지저분하다(저자 曰)
+
+도메인 관심사와 무관하게 가장 나은 방안이 1번 방안이다(저자 曰)
+
+그럼 어디 둘까? 애그리게이트에 둔다.
+
+```python
+class Product:
+    def __init__(
+            self,
+            sku: str,
+            batches: List[Batch],
+            version_number: int = 0,
+    ):
+        self.sku = sku
+        self.batches = batches
+        self.version_number = version_number
+
+    def allocate(
+            self,
+            line: OrderLine,
+    ) -> str:
+        try:
+            batch = next(b for b in sorted(self.batches) if b.can_allocate(line))
+            batch.allocate(line)
+            self.version_number += 1   # (1)
+            return batch.reference
+        except StopIteration:
+            raise OutOfStock(f"Out of stock for sku {line.sku}")
+
+```
+
+1. 이 쯤 처리한다
+    1. 참고: 버전 번호에 대해 고심하고있다면 “번호” 란 말이 그다지 중요하지 않다는 사실을 깨달으면 좋을 듯 하다.
+    2. 중요한 점은 `Product` 애그리게이트 변경 시 `Product` DB 컬럼이 변경된다는 사실이다.
+    3. 매번 임의로 UUID를 생성하거나, Snowflake ID[^6] 같은 걸 쓰는건 어떨까 싶다.
+
+# 7.8 데이터 무결성 규칙 테스트
+
+이 대로 했을 때 의도대로 잘 되는지 살펴보자! 동시에 트랜잭션을 시도하면 모두 버전 번호를 올릴 수는 없으니 둘 중 하나는 실패할 것이다.
+
+느린 트랜잭션[^7]을 하나 임의로 만들어보자:
+
+```python
+def try_to_allocate(orderid, sku, exceptions):
+    line = model.OrderLine(orderid, sku, 10)
+    try:
+        with unit_of_work.SqlAlchemyUnitOfWork() as uow:
+            product = uow.products.get(sku=sku)
+            product.allocate(line)
+            time.sleep(0.2)
+            uow.commit()
+    except Exception as e:
+        print(traceback.format_exc())
+        exceptions.append(e)
+```
+
+어떻게 테스트하는지 살펴보자:
+
+```python
+def test_concurrent_updates_to_version_are_not_allowed(postgres_session_factory):
+    sku, batch = random_sku(), random_batchref()
+    session = postgres_session_factory()
+    insert_batch(session, batch, sku, 100, eta=None, product_version=1)
+    session.commit()
+
+    order1, order2 = random_orderid(1), random_orderid(2)
+    exceptions = []  # type: List[Exception]
+    try_to_allocate_order1 = lambda: try_to_allocate(order1, sku, exceptions)
+    try_to_allocate_order2 = lambda: try_to_allocate(order2, sku, exceptions)
+    thread1 = threading.Thread(target=try_to_allocate_order1)  #(1)
+    thread2 = threading.Thread(target=try_to_allocate_order2)  #(1)
+    thread1.start()
+    thread2.start()
+    thread1.join()
+    thread2.join()
+
+    [[version]] = session.execute(
+        "SELECT version_number FROM products WHERE sku=:sku",
+        dict(sku=sku),
+    )
+    assert version == 2  #(2)
+    [exception] = exceptions
+    assert "could not serialize access due to concurrent update" in str(exception)  #(3)
+
+    orders = session.execute(
+        "SELECT orderid FROM allocations"
+        " JOIN batches ON allocations.batch_id = batches.id"
+        " JOIN order_lines ON allocations.orderline_id = order_lines.id"
+        " WHERE order_lines.sku=:sku",
+        dict(sku=sku),
+    )
+    assert orders.rowcount == 1  #(4)
+    with unit_of_work.SqlAlchemyUnitOfWork() as uow:
+        uow.session.execute("select 1")
+```
+
+1. 원하는 동시성 행동 방식을 잘 재현할 수 있는 두 스레드를 실행시킨다.
+    1. `read1`, `read2` 그리고 `write1`, `write2`
+2. 버전 번호가 `1` 오른 것을 확인한다
+3. 필요하면 이런 식으로 확인한다
+4. `allocate()` 이 하나만 되었음을 검사한다
+
+## 7.8.1 DB 트랜잭션 격리 수준을 사용하여 동시성 규칙을 강제
+
+- (Postgres 에만 국한되는건 아니지만) 트랜잭션 격리 수준을 `REPEATABLE READ` 로 조절한다. 상세한 정보는 [Postgres 공식 문서](https://www.postgresql.org/docs/current/transaction-iso.html)를 읽자
+
+```python
+DEFAULT_SESSION_FACTORY = sessionmaker(
+    bind=create_engine(
+        config.get_postgres_uri(),
+        isolation_level="REPEATABLE READ",
+    )
+)
+```
+
+## 7.8.2 비관적 동시성 제어 예제: `SELECT FOR UPDATE`
+
+해당 방안은 비관적 동시성 제어 방안 중 하나이다. `SELECT FOR UPDATE` [^8]는 두 트랜잭션이 동시에 같은 row를 읽도록 허용하지 않는다.
+
+`SELECT FOR UPDATE` 는 lock으로 사용할 row를 선택하는 방안이다(업데이트 대상 row일 필요는 없다). 두 트랜잭션이 동시에 `SELECT FOR UPDATE` 를 수행하면 두 업데이트 중 하나만 승리하고 나머지는 상대방이 lock을 풀 때 까지 기다려야 한다. 이는 동시성 패턴을 아래와 같이 바꾼다.
+
+> AS-IS
+`read1`, `read2` , `write1`, `write2(fail)`
+> 
+
+> TO-BE
+`read1`, `write1`, `read2`, `write2(succeed)`
+> 
+
+이걸 “Read-Modify-Write” failure mode 라고 부르는 사람도 있다. 아래 게시글을 읽고 통찰을 얻자!
+
+["PostgreSQL Anti-Patterns: Read-Modify-Write Cycles"](https://oreil.ly/uXeZI)
+
+`REPEATABLE READ` 나 `SELECT FOR UPDATE` 어떤걸 하든 트레이드오프가 있다. 상기 테스트코드와 같은 접근을 하면 어떤 식으로 바뀌는지 알 수 있다. 물론 테스트코드를 더 좋게 보강해야겠지만…
+
+동시성 제어를 어떻게 할지는 비즈니스 환경, 저장소 기술에 따라 달라진다.
+
+# 7.9 마치며
+
+이번 장은 애그리게이트의 개념을 살펴봤다.
+
+애그리게이트는…
+
+- 모델의 일부 부분집합에 대한 주 진입점 역할을 한다
+- 모든 모델 객체에 대한 비즈니스 규칙과 불변조건을 강제하는 역할을 담당하도록 객체를 명시적으로 모델링한다
+
+올바른 애그리게이트를 잘 선택해야 한다! 시간이 지나고 요구사항 등등 재검토를 수행하다 보면 애그리게이트로 고른 객체가 달라질 수도 있다.
+
+[이 링크](https://www.dddcommunity.org/library/vernon_2011/)를 꼭 읽어보자. 존 버넌이 효과적인 애그리게이트 설계에 대해 쓴 글이다.
+
+그러면 이어서, 애그리게이트의 트레이드오프에 대해 살펴보자.
+
+| 장점 | 단점 |
+| --- | --- |
+| 애그리게이트는 도메인 모델 클래스 중 어떤 부분이 공개되어있고, 어떤 부분이 비공개인지 결정할 수 있다(멤버함수, 멤버변수에 _ 하나를 붙여서) | 엔티티, VO를 적당히 잘 감싼 객체가 또 하나 생긴다. 솔직히 이해하기 너무 어렵다…. |
+| 연산 주변에 명시적인 Bounded Context를 모델링할 수 있으면 ORM 성능 문제 예방에 도움된다 | 한번에 한 가지 애그리게이트만 변경할 수 있다는 규칙을 엄격히 지키도록 해야하는데, 그것도 정말 어렵다… |
+| 애그리게이트는 자신이 담당한 모델에 대한 상태변경만을 책임지도록 하면 시스템 추론 및 불변조건 제어가 쉬워진다 | 애그리게이트 사이의 최종 일관성을 처리하는 과정이 복잡해질 수 있다. 와 정말 너무 어렵다………… |
+
+## 7.9.1 애그리게이트와 일관성 경계
+
+1. 애그리게이트는 도메인 모델에 대한 진입점이다
+    1. 도메인에 속한 것을 바꿀 수 있는 방식을 제한하면 시스템을 더 쉽게 추론할 수 있다
+2. 애그리게이트는 Bounded Context를 책임진다
+    1. 애그리게이트의 역할은 여러 객체로 이루어진 그룹에 적용할 불변조건에 대한 비즈니스 규칙을 관리하는 것이다
+    2. 자신이 담당하는 객체 사이와 객체와 비즈니스 규칙 사이의 일관성을 검사하고, 어떤 변경이 일관성을 해친다면 이를 거부하는 것도 애그리게이트의 할 일이다.
+3. 애그리게이트와 동시성 문제는 공존한다
+    1. 동시성 검사 구현 방안을 고민하면 자연스럽게 트랜잭션과 lock까지 간다. 이는 성능과 직결된 이야기다
+    2. 애그리게이트를 제대로 고르는 것은 도메인을 개념적으로 잘 조직화하는 것 뿐 아니라 성능까지 살펴보는 것이다
+
+# 7.10 1부 돌아보기
+
+아무리 예제를 베끼고 내가 짜야할 것들을 짜고 했지만 이걸 만들다니….
+
+![이겼다! 제 1부 끝!]([https://www.cosmicpython.com/book/images/apwp_0705.png](https://www.cosmicpython.com/book/images/apwp_0705.png))
+
+뭘 만들어낸건지 리뷰해보자.
+
+1. 테스트 피라미드 → 검증된 도메인 모델 생성
+    1. 비즈니스 요구사항에 맞게 시스템이 어떻게 도는지를 코드로 작성했다
+    2. 비즈니스 요구사항이 바뀌면 테스트도 마찬가지로 변하면 된다
+2. API 핸들러, DB 등의 구조를 분리했다
+    1. 애플리케이션 외부에서 하부구조를 끼워넣을 수 있게 만들었다
+    2. 코드 베이스의 조직화가 이루어졌다
+    → 코드 내부가 파악하지도 못하게 복잡해지는 것은 막했다
+3. DIP를 적용했다. 포트와 어댑터에서 영향받은 “저장소” 와 UoW를 사용했다
+    1. 저장소 수준의 테스트코드와 UoW 수준의 테스트코드를 분리했다
+    2. 시스템의 한쪽 끝부터 다른쪽 끝까지 테스트했다
+4. Bounded Context
+    1. 변경이 필요할 때마다 전체 시스템을 잠그고 싶지않아서, 어떤 부분에 대해서만 일관성을 가지는지를 나눴다
+
+2부에서는 모델을 넘어서는 일관성을 처리하기 위한 방안을 살펴볼 것이다.
+
+> **경고!**
+
+이런 패턴이 하나씩하나씩 붙을 때 마다 전부 비용이다.
+
+간접계층 하나하나가 모두 비용이다.
+이 패턴을 모르는 사람에게 혼동을 야기할 수 있다. 이것도 큰 비용이다.
+만약 만들 앱이 DB를 단순히 감싸는 CRUD wrapper 라면? 앞으로 이것 외의 일을 할 것 같지 않다면?
+
+***이런 복잡한걸 쓸 필요가 없다*.**
+> 
+
+[^1]: 왠지 [이 책의 3장](http://www.yes24.com/Product/Goods/114667254)을 다시 읽어봐야할 것 같은 느낌이다. 저기서 본 내용들의 일부가 여기도 나온다. 
+
 [^2]: 할당 후 배치의 가용 재고 수량이 라인의 상품 수량만큼 감소하므로 비즈니스 제약 사항을 만족한다면 항상 가용 재고 수량은 `0`보다 크거나 같다.
+
 [^3]: 이 코드의 모델의 경우 배치가 컬렉션이다.
+
 [^4]: [A product is identified by a SKU, …](https://www.cosmicpython.com/book/chapter_01_domain_model.html#allocation_notes) 하면서 이미 풀어놨음
+
 [^5]: [이 분의 블로그 게시글](https://haandol.github.io/2021/10/11/thoughts-for-ddd-starters.html#fn:1)을 보고 뽐뿌가 왔다… 꼭 지식을 머리속에 집어넣도록 하자
+
+[^6]: [https://en.wikipedia.org/wiki/Snowflake_ID](https://en.wikipedia.org/wiki/Snowflake_ID) 를 의미한다 
+
+[^7]: 동시성 버그 재현을 위해 스레드 사이에서 세마포어나 비슷한 동기화 기능을 쓰는 편이 테스트 행동 방식을 보다 잘 보장할 수 있다.
+
+[^8]: [https://www.postgresql.org/docs/current/explicit-locking.html](https://www.postgresql.org/docs/current/explicit-locking.html)

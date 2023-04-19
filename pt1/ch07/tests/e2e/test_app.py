@@ -29,6 +29,7 @@ async def post_to_add_batch(client, ref, sku, qty, eta):
 async def test_happy_path_returns_201_and_allocated_batch(
         async_engine,
         client,
+        clear,
 ):
     sku, othersku = random_sku(), random_sku('other')
     earlybatch = random_batchref(1)
@@ -57,6 +58,7 @@ async def test_happy_path_returns_201_and_allocated_batch(
 @pytest.mark.integration
 async def test_should_raise_out_of_stock_when_batch_is_invalid(
         client,
+        clear,
 ):
     order_line = OrderLine("order-123", "DONTEXIST-111", 2)
     res = await client.post(
@@ -71,6 +73,7 @@ async def test_should_raise_out_of_stock_when_batch_is_invalid(
 @pytest.mark.integration
 async def test_api_do_deallocate(
         client,
+        clear,
 ):
     sku, othersku = random_sku(), random_sku('other')
     earlybatch = random_batchref(1)
@@ -98,6 +101,7 @@ async def test_api_do_deallocate(
 @pytest.mark.integration
 async def test_should_raise_out_of_stock_when_deleted_unknown_batch(
         client,
+        clear,
 ):
     order_line = OrderLine("order-123", "DONTEXIST-222", 4)
     res = await client.post(

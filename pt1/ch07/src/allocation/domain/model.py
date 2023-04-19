@@ -28,6 +28,9 @@ class Batch:
         self.purchased_quantity = qty
         self.allocations = set()        # OrderLine 값 객체를 모아두는 논리적인 값임! DB 단에선 이게 별도의 allocations로 표현되었음.
 
+    def __repr__(self):
+        return f"<Batch {self.reference}>"
+
     def __eq__(self, other):
         if not isinstance(other, Batch):
             return False
@@ -68,9 +71,11 @@ class Product:
             self,
             sku: str,
             batches: List[Batch],
+            version_number: int = 0,
     ):
         self.sku = sku
         self.batches = batches
+        self.version_number = version_number
 
     def allocate(
             self,
@@ -79,6 +84,7 @@ class Product:
         try:
             batch = next(b for b in sorted(self.batches) if b.can_allocate(line))
             batch.allocate(line)
+            self.version_number += 1
             return batch.reference
         except StopIteration:
             raise OutOfStock(f"Out of stock for sku {line.sku}")

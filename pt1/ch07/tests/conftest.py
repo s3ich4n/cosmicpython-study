@@ -7,6 +7,7 @@ import pytest_asyncio
 from asgi_lifespan import LifespanManager
 from dependency_injector import providers
 from httpx import AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_scoped_session, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
@@ -29,7 +30,7 @@ def make_container():
     container.db.override(
         providers.Singleton(
             AsyncSQLAlchemy,
-            db_uri="sqlite+aiosqlite:///:memory:",
+            db_uri="postgresql+asyncpg://test:test@localhost:5432/test",
         )
     )
 
@@ -53,7 +54,11 @@ def mapper():
 
 @pytest_asyncio.fixture(scope="session", name="async_engine")
 async def async_engine_maker(rdbms):
-    await rdbms.connect(echo=True)
+    await rdbms.connect(
+        isolation_level="REPEATABLE READ",
+        future=True,
+        echo=True,
+    )
     await rdbms.create_database()
     yield
     await rdbms.disconnect()
@@ -76,9 +81,18 @@ async def get_async_session_maker(
     yield _async_session_maker
 
 
-@pytest_asyncio.fixture(name="session")
+@pytest_asyncio.fixture(name="clear")
 async def get_async_session(
         async_session_maker,
 ):
-    async with async_session_maker() as _session:
-        yield _session
+    async with async_session_maker() as _sess:
+        yield
+        await reset_table(_sess)
+
+
+async def reset_table(session):
+    await session.execute(text("DELETE FROM allocations"))
+    await session.execute(text("DELETE FROM batches"))
+    await session.execute(text("DELETE FROM products"))
+    await session.execute(text("DELETE FROM order_lines"))
+    await session.commit()

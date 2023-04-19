@@ -9,15 +9,20 @@ from pt1.ch07.src.allocation.domain import model
 
 
 @pytest.mark.asyncio
-async def test_orderline_mapper_can_load_lines(session):
+async def test_orderline_mapper_can_load_lines(
+        session,
+        clear,
+):
     await session.execute(
         text(
-            "INSERT INTO order_lines (orderid, sku, qty) VALUES "
-            '("order1", "RED-CHAIR", 12),'
-            '("order1", "RED-TABLE", 13),'
-            '("order2", "BLUE-LIPSTICK", 14)'
+            "INSERT INTO order_lines (sku, qty, orderid)"
+            " VALUES"
+            "('RED-CHAIR', 12, 'order1'), "
+            "('RED-TABLE', 13, 'order1'), "
+            "('BLUE-LIPSTICK', 14, 'order2');"
         )
     )
+    await session.commit()
 
     expected = [
         model.OrderLine("order1", "RED-CHAIR", 12),
@@ -38,7 +43,7 @@ async def test_orderline_mapper_can_save_lines(
 
     rows = list(
         await session.execute(
-            text('SELECT orderid, sku, qty FROM "order_lines"')
+            text('SELECT orderid, sku, qty FROM order_lines')
         )
     )
     assert rows == [("order1", "DECORATIVE-WIDGET", 12)]
@@ -51,16 +56,27 @@ async def test_retrieving_batches(
 ):
     await session.execute(
         text(
-            "INSERT INTO batches (reference, sku, purchased_quantity, eta)"
-            ' VALUES ("batch1", "sku1", 100, null)'
+            "INSERT INTO products (sku) VALUES ('sku1')"
+        )
+    )
+    await session.execute(
+        text(
+            "INSERT INTO products (sku) VALUES ('sku2')"
         )
     )
     await session.execute(
         text(
             "INSERT INTO batches (reference, sku, purchased_quantity, eta)"
-            ' VALUES ("batch2", "sku2", 200, "2011-04-11")'
+            " VALUES ('batch1', 'sku1', 100, null)"
         )
     )
+    await session.execute(
+        text(
+            "INSERT INTO batches (reference, sku, purchased_quantity, eta)"
+            " VALUES ('batch2', 'sku2', 200, '2011-04-11')"
+        )
+    )
+    await session.commit()
 
     expected = [
         model.Batch("batch1", "sku1", 100, eta=None),
@@ -74,12 +90,17 @@ async def test_saving_batches(
         session,
         clear,
 ):
+    await session.execute(
+        text(
+            "INSERT INTO products (sku) VALUES ('sku1')"
+        )
+    )
     batch = model.Batch("batch1", "sku1", 100, eta=None)
     session.add(batch)
     await session.commit()
 
     rows = await session.execute(
-        text('SELECT reference, sku, purchased_quantity, eta FROM "batches"')
+        text('SELECT reference, sku, purchased_quantity, eta FROM batches')
     )
     assert list(rows) == [("batch1", "sku1", 100, None)]
 
@@ -89,6 +110,11 @@ async def test_saving_allocations(
         session,
         clear,
 ):
+    await session.execute(
+        text(
+            "INSERT INTO products (sku) VALUES ('sku1')"
+        )
+    )
     batch = model.Batch("batch1", "sku1", 100, eta=None)
     line = model.OrderLine("order1", "sku1", 10)
     batch.allocate(line)
@@ -97,7 +123,7 @@ async def test_saving_allocations(
 
     rows = list(
         await session.execute(
-            text('SELECT batch_id, orderline_id FROM "allocations"')
+            text('SELECT batch_id, orderline_id FROM allocations')
         )
     )
     assert rows == [(batch.id, line.id)]
@@ -110,8 +136,13 @@ async def test_retrieving_allocations(
 ):
     await session.execute(
         text(
-            'INSERT INTO order_lines (orderid, sku, qty)'
-            ' VALUES ("order1", "sku1", 12)'
+            "INSERT INTO products (sku) VALUES ('sku1')"
+        )
+    )
+    await session.execute(
+        text(
+            "INSERT INTO order_lines (orderid, sku, qty)"
+            " VALUES ('order1', 'sku1', 12)"
         )
     )
     [[olid]] = await session.execute(
@@ -124,7 +155,7 @@ async def test_retrieving_allocations(
     await session.execute(
         text(
             "INSERT INTO batches (reference, sku, purchased_quantity, eta)"
-            ' VALUES ("batch1", "sku1", 100, null)'
+            " VALUES ('batch1', 'sku1', 100, null)"
         )
     )
     [[bid]] = await session.execute(
@@ -135,6 +166,7 @@ async def test_retrieving_allocations(
         text("INSERT INTO allocations (orderline_id, batch_id) VALUES (:olid, :bid)"),
         dict(olid=olid, bid=bid),
     )
+    await session.commit()
 
     batch = (
         (

@@ -16,7 +16,8 @@ async def test_repository_can_save_a_batch(
         session,
         clear,
 ):
-    batch = model.Batch("batch1", "RUSTY-SOAPDISH", 100, eta=None)
+    sku = await insert_product(session, "RUSTY-SOAPDISH")
+    batch = model.Batch("batch1", sku, 100, eta=None)
     repo = repository.SqlAlchemyRepository(session)
     await repo.add(batch)
     await session.commit()

@@ -1,29 +1,25 @@
+import time
+
 import pytest_asyncio
 from sqlalchemy.sql import text
 
+from pt1.ch07.src.allocation.domain import model
+from pt1.ch07.src.allocation.service_layer import unit_of_work
 
-@pytest_asyncio.fixture(name="clear")
+
+@pytest_asyncio.fixture(name="session")
 async def get_async_session(
         async_session_maker,
 ):
     async with async_session_maker() as _session:
-        yield
-        await reset_table(_session)
-
-
-async def reset_table(session):
-    await session.execute(text("DELETE FROM order_lines"))
-    await session.execute(text("DELETE FROM batches"))
-    await session.execute(text("DELETE FROM allocations"))
-    await session.execute(text("DELETE FROM products"))
-    await session.commit()
+        yield _session
 
 
 async def insert_order_line(session, order_id, sku):
     await session.execute(
         text(
             "INSERT INTO order_lines (orderid, sku, qty)"
-            ' VALUES ("order1", "GENERIC-SOFA", 12)'
+            " VALUES ('order1', 'GENERIC-SOFA', 12)"
         ),
     )
     [[orderline_id]] = await session.execute(
@@ -98,3 +94,13 @@ async def get_allocated_batch_ref(session, orderline_id, sku):
         dict(orderlineid=orderlineid),
     )
     return batchref
+
+
+async def try_to_allocate(async_session_maker, orderid, sku):
+    line = model.OrderLine(orderid, sku, 10)
+
+    async with unit_of_work.SqlAlchemyUnitOfWork(async_session_maker) as uow:
+        product = await uow.products.get(sku=sku)
+        product.allocate(line)
+        time.sleep(0.2)
+        await uow.commit()

@@ -28,7 +28,7 @@ batches = Table(
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("reference", String(255)),
-    Column("sku", String(255), ForeignKey("products.sku")),
+    Column("sku", String(255), ForeignKey("products.sku", ondelete="CASCADE")),
     Column("purchased_quantity", Integer, nullable=False),
     Column("eta", Date, nullable=True),
 )
