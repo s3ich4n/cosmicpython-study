@@ -471,6 +471,64 @@ class FakeUnitOfWork(unit_of_work.AbstractUnitOfWork):
 
 composition over inheritance 구현 방안은 어떻게 짤 수 있을까?
 
+이런 식으로 테스트용 UoW를 처리한다:
+
+```python
+class FakeUnitOfWork(unit_of_work.AbstractUnitOfWork):
+    def __init__(self):
+        self.products = repository.TrackingRepository(FakeRepository())
+        self.committed = False
+
+    def _commit(self):
+        self.committed = True
+
+    def _rollback(self):
+        pass
+```
+
+이런 식으로 감싼다:
+
+```python
+class TrackingRepository:
+    seen = Set[model.Product]
+
+    def __init__(self, repo: AbstractRepository):
+        self._repo = repo
+        self.seen = set()  # type: Set[model.Product]
+
+    def add(self, product: model.Product):
+        self._repo.add(product)
+        self.seen.add(product)
+
+    def get(self, sku: model.Sku) -> model.Product:
+        product = self._repo.get(sku)
+        if product:
+            self.seen.add(product)
+        return product
+
+    def list(self) -> List[model.Product]:
+        return self._repo.list()
+```
+
+그 다음 사용할 때는 이런 식으로 처리한다. 테스트를 돌려보면서 점검해보자!
+
+```python
+class SqlAlchemyUnitOfWork(AbstractUnitOfWork):
+    def __init__(self, session_factory):
+        self.session_factory = session_factory
+
+    async def __aenter__(self):
+        self.session: AsyncSession = self._session_factory()
+        self.products = repository.TrackingRepository(
+            repository.SqlAlchemyRepository(self.session)
+        )
+        return await super().__enter__()
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await super().__aexit__(exc_type, exc_val, exc_tb)
+        await self.session.close()
+```
+
 # 8.7 마무리
 
 ## 8.7.1 본문
