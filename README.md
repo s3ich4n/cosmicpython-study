@@ -32,7 +32,7 @@
 ## Prerequisites
 
 - [Poetry](https://python-poetry.org/)
-- TBD (아마도 도커?)
+- [Docker Engine](https://docs.docker.com/get-docker/)
 
 ## 설치
 
@@ -40,4 +40,4 @@
 poetry install
 ```
 
-각 디렉토리 접근 후 처리
+각 디렉토리 접근 후 작업수행
