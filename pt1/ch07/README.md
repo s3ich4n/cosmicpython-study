@@ -6,7 +6,7 @@
 
 애그리게이트가 추가되면 도메인을 이런식으로 표현할 수 있게 된다
 
-![]([https://www.cosmicpython.com/book/images/apwp_0701.png](https://www.cosmicpython.com/book/images/apwp_0701.png))
+![https://www.cosmicpython.com/book/images/apwp_0701.png](https://www.cosmicpython.com/book/images/apwp_0701.png)
 
 # 7.1 모든 것을 스프레드시트에서 처리하지 않는 이유
 
