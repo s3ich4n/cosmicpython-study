@@ -86,5 +86,5 @@ async def change_batch_quantity(
 ):
     async with uow:
         product = await uow.products.get_by_batchref(batchref=event.ref)
-        await product.change_batch_quantity(event.ref, event.qty)
+        product.change_batch_quantity(event.ref, event.qty)
         await uow.commit()

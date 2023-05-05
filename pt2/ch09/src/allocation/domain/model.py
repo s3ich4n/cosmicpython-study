@@ -10,6 +10,7 @@ class OutOfStock(Exception):
     pass
 
 
+# FYI, https://github.com/cosmicpython/code/issues/17
 @dataclass(unsafe_hash=True)
 class OrderLine:
     orderid: str
@@ -54,6 +55,9 @@ class Batch:
     def deallocate(self, line: OrderLine):
         if line in self.allocations:
             self.allocations.remove(line)
+
+    def deallocate_one(self) -> OrderLine:
+        return self.allocations.pop()
 
     @property
     def allocated_quantity(self) -> int:
@@ -104,3 +108,16 @@ class Product:
             obj for obj in self.batches
             if batch_ref in obj.reference
         )
+
+    def change_batch_quantity(self, batch_ref: str, qty: int):
+        batch = self.get_allocation(batch_ref)
+        batch.purchased_quantity = qty
+        while batch.available_quantity < 0:
+            line = batch.deallocate_one()
+            self.events.append(
+                events.AllocationRequired(
+                    line.orderid,
+                    line.sku,
+                    line.qty,
+                )
+            )

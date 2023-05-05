@@ -39,5 +39,5 @@ HANDLERS = {
     events.OutOfStock: [handlers.send_out_of_stock_notification],
     events.AllocationRequired: [handlers.allocate],
     events.DeallocationRequired: [handlers.deallocate],
-    # events.BatchQuantityChanged: [handlers.change_batch_quantity],
+    events.BatchQuantityChanged: [handlers.change_batch_quantity],
 }  # type: Dict[Type[events.Event], List[Callable]]

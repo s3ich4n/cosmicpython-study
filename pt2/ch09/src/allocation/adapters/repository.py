@@ -4,6 +4,7 @@ from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from pt2.ch09.src.allocation.adapters import orm
 from pt2.ch09.src.allocation.domain import model
 
 
@@ -12,6 +13,9 @@ class AbstractRepository(Protocol):
         raise NotImplementedError
 
     async def get(self, sku) -> model.Product:
+        raise NotImplementedError
+
+    async def get_by_batchref(self, batchref) -> model.Product:
         raise NotImplementedError
 
     async def list(self) -> List[model.Product]:
@@ -34,6 +38,12 @@ class TrackingRepository:
 
     async def get(self, sku) -> model.Product:
         product = await self._repo.get(sku)
+        if product:
+            self.seen.add(product)
+        return product
+
+    async def get_by_batchref(self, batchref) -> model.Product:
+        product = await self._repo.get_by_batchref(batchref)
         if product:
             self.seen.add(product)
         return product
@@ -64,6 +74,19 @@ class SqlAlchemyRepository(AbstractRepository):
                     select(model.Product)
                     .options(selectinload(model.Product.batches))
                     .filter(model.Product.sku == sku)
+                )
+            )
+            .scalars()
+            .one_or_none()
+        )
+
+    async def get_by_batchref(self, batchref) -> model.Product:
+        return (
+            (
+                await self.session.execute(
+                    select(model.Product)
+                    .join(model.Batch)
+                    .filter(orm.batches.c.reference == batchref)
                 )
             )
             .scalars()

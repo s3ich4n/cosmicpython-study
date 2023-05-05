@@ -32,6 +32,13 @@ class FakeRepository(repository.AbstractRepository):
     async def get(self, sku) -> model.Product:
         return next((b for b in self._products if b.sku == sku), None)
 
+    async def get_by_batchref(self, batchref) -> model.Product:
+        return next((
+            p for p in self._products for b in p.batches
+            if b.reference == batchref),
+            None
+        )
+
     async def list(self) -> List[model.Product]:
         return list(self._products)
 
@@ -195,3 +202,49 @@ class TestDeallocate:
 
         assert batch.allocated_quantity == 0
         assert uow.committed
+
+
+class TestChangeBatchQuantity:
+    @pytest.mark.asyncio
+    async def test_changes_available_quantity(self):
+        uow = FakeUnitOfWork()
+
+        await messagebus.handle(
+            events.BatchCreated("batch1", "ADORABLE-SETTEE", 100, eta=None),
+            uow,
+        )
+
+        [batch] = (await uow.products.get(sku="ADORABLE-SETTEE")).batches
+        assert batch.available_quantity == 100
+
+        await messagebus.handle(
+            events.BatchQuantityChanged("batch1", 50),
+            uow,
+        )
+
+        assert batch.available_quantity == 50
+
+    @pytest.mark.asyncio
+    async def test_reallocates_if_necessary(self):
+        uow = FakeUnitOfWork()
+        event_history = [
+            events.BatchCreated("batch1", "INDIFFERENT-TABLE", 50, None),
+            events.BatchCreated("batch2", "INDIFFERENT-TABLE", 50, today),
+            events.AllocationRequired("order1", "INDIFFERENT-TABLE", 20),
+            events.AllocationRequired("order2", "INDIFFERENT-TABLE", 20),
+        ]
+
+        for e in event_history:
+            await messagebus.handle(e, uow)
+
+        [batch1, batch2] = (await uow.products.get(sku="INDIFFERENT-TABLE")).batches
+
+        assert batch1.available_quantity == 10
+        assert batch2.available_quantity == 50
+
+        await messagebus.handle(events.BatchQuantityChanged("batch1", 25), uow)
+
+        # order1 혹은 order2 가 할당 해제된다. 25-20이 수량이 된다.
+        assert batch1.available_quantity == 5
+        # 다음 배치에서 20을 재할당한다
+        assert batch2.available_quantity == 30
