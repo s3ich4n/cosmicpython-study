@@ -469,7 +469,16 @@ class FakeUnitOfWork(unit_of_work.AbstractUnitOfWork):
 
 ### 8.6.2 연습문제
 
-composition over inheritance 구현 방안은 어떻게 짤 수 있을까?
+지금이야 코드도 짧고 예시에 가까운 것들이니 귀찮다 싶겠지만, 프로그램의 확장성을 공부한다는 차원에서 이 글도 보면 좋다. 
+
+코드에는 `Protocol` 과 `TrackingRepository` 로 감싸는 두 접근법을 모두 취할 것이다.
+
+객체지향 관점에서 좋은 접근방안에 대해 소개한 글이 있다. 
+
+- [The Composition Over Inheritance Principle](https://python-patterns.guide/gang-of-four/composition-over-inheritance/)
+- [Inheritance and Composition: A Python OOP Guide](https://realpython.com/inheritance-composition-python/)
+
+그렇다면 composition over inheritance 구현 방안은 어떻게 짤 수 있을까?
 
 이런 식으로 테스트용 UoW를 처리한다:
 
