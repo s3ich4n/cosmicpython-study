@@ -1,3 +1,4 @@
+from collections import deque
 from datetime import datetime, timedelta
 from typing import List
 
@@ -60,16 +61,36 @@ class FakeRepository(repository.AbstractRepository):
         )
 
 
+class FakeMessageBus(messagebus.AbstractMessageBus):
+    def __init__(self):
+        self.events_published: deque[events.Event] = deque()
+        self.handlers = {
+            events.BatchCreated: [lambda x: self.events_published.append(x)],
+            events.OutOfStock: [lambda x: self.events_published.append(x)],
+            events.AllocationRequired: [lambda x: self.events_published.append(x)],
+            events.DeallocationRequired: [lambda x: self.events_published.append(x)],
+            events.BatchQuantityChanged: [lambda x: self.events_published.append(x)],
+        }
+
+
 class FakeUnitOfWork(unit_of_work.AbstractUnitOfWork):
     def __init__(self):
-        self.products = repository.TrackingRepository(FakeRepository([]))
         self.committed = False
+        self.events_published: deque[events.Event] = deque()
+        self.products = repository.TrackingRepository(FakeRepository([]))
 
     async def commit(self):
         self.committed = True
 
     async def rollback(self):
         pass
+
+    def collect_new_events(self):
+        for product in self.products.seen:
+            while product.events:
+                event = product.events.popleft()
+                self.events_published.append(event)
+                yield event
 
 
 class TestAddBatch:
@@ -238,11 +259,15 @@ class TestChangeBatchQuantity:
             await messagebus.handle(e, uow)
 
         [batch1, batch2] = (await uow.products.get(sku="INDIFFERENT-TABLE")).batches
-
         assert batch1.available_quantity == 10
         assert batch2.available_quantity == 50
 
         await messagebus.handle(events.BatchQuantityChanged("batch1", 25), uow)
+
+        [reallocation_event] = uow.events_published
+        assert isinstance(reallocation_event, events.AllocationRequired)
+        assert reallocation_event.orderid in {'order1', 'order2'}
+        assert reallocation_event.sku == "INDIFFERENT-TABLE"
 
         # order1 혹은 order2 가 할당 해제된다. 25-20이 수량이 된다.
         assert batch1.available_quantity == 5
