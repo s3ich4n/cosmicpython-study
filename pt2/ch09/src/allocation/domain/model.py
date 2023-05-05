@@ -1,5 +1,5 @@
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Optional, List
 
@@ -17,19 +17,17 @@ class OrderLine:
     qty: int
 
 
+@dataclass
 class Batch:
-    def __init__(
-            self,
-            ref: str,
-            sku: str,
-            qty: int,
-            eta: Optional[date],
-    ):
-        self.reference = ref
-        self.sku = sku
-        self.eta = eta
-        self.purchased_quantity = qty
-        self.allocations = set()        # OrderLine 값 객체를 모아두는 논리적인 값임! DB 단에선 이게 별도의 allocations로 표현되었음.
+    reference: str
+    sku: str
+    qty: int
+    eta: Optional[date]
+    purchased_quantity: int = field(init=False)
+    allocations: set = field(default_factory=set)   # OrderLine 값 객체를 모아두는 논리적인 값임! DB 단에선 이게 별도의 allocations로 표현되었음.
+
+    def __post_init__(self):
+        self.purchased_quantity = self.qty
 
     def __repr__(self):
         return f"<Batch {self.reference}>"

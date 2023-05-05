@@ -28,7 +28,7 @@ async def add_batch(
 
         product.batches.append(
             model.Batch(
-                ref=event.ref,
+                reference=event.ref,
                 sku=event.sku,
                 qty=event.qty,
                 eta=event.eta,
@@ -77,4 +77,14 @@ async def deallocate(
             raise InvalidSku(f'Invalid sku {line.sku}')
 
         product.deallocate(line)
+        await uow.commit()
+
+
+async def change_batch_quantity(
+        event: events.BatchQuantityChanged,
+        uow: unit_of_work.AbstractUnitOfWork,
+):
+    async with uow:
+        product = await uow.products.get_by_batchref(batchref=event.ref)
+        await product.change_batch_quantity(event.ref, event.qty)
         await uow.commit()
