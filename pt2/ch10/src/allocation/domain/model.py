@@ -27,6 +27,7 @@ class Batch:
     purchased_quantity: int = field(init=False)
     allocations: set = field(default_factory=set)   # OrderLine 값 객체를 모아두는 논리적인 값임! DB 단에선 이게 별도의 allocations로 표현되었음.
 
+    # dataclass에서 추가적으로 처리할 연산
     def __post_init__(self):
         self.purchased_quantity = self.qty
 

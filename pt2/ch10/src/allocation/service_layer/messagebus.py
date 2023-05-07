@@ -29,11 +29,11 @@ class MessageBus:
         events.OutOfStock: [handlers.send_out_of_stock_notification],
     }   # type: Dict[Type[events.Event], List[Callable]]
     COMMAND_HANDLERS = {
-        commands.Allocate: [handlers.allocate],
-        commands.Deallocate: [handlers.deallocate],
-        commands.CreateBatch: [handlers.add_batch],
-        commands.ChangeBatchQuantity: [handlers.change_batch_quantity],
-    }   # type: Dict[Type[commands.Command], List[Callable]]
+        commands.Allocate: handlers.allocate,
+        commands.Deallocate: handlers.deallocate,
+        commands.CreateBatch: handlers.add_batch,
+        commands.ChangeBatchQuantity: handlers.change_batch_quantity,
+    }   # type: Dict[Type[commands.Command], Callable]
 
 
 async def handle(
@@ -61,15 +61,15 @@ async def handle_command(
         queue: deque[Message],
         uow: unit_of_work.AbstractUnitOfWork,
 ):
-    for handler in MessageBus.COMMAND_HANDLERS[type(command)]:
-        try:
-            logger.debug(f'Handling command {command}')
-            result = await handler(command, uow)
-            queue.extend(uow.collect_new_events())
-            return result
-        except Exception as ex:
-            logger.exception('Exception handling %s', ex)
-            raise
+    logger.debug(f'Handling command {command}')
+    try:
+        handler = MessageBus.COMMAND_HANDLERS[type(command)]
+        result = await handler(command, uow)
+        queue.extend(uow.collect_new_events())
+        return result
+    except Exception as ex:
+        logger.exception(f'Exception handling {command}... detail: {ex}')
+        raise
 
 
 async def handle_event(
