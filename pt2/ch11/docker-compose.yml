@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  postgres: # See Also: https://hub.docker.com/_/postgres
+    image: postgres:14.6-alpine
+    hostname: hostname-postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=test
+      - POSTGRES_PASSWORD=test
+      - POSTGRES_DB=test
+
+  redis: # See Also: https://hub.docker.com/_/redis
+    image: redis:7.0.5-alpine
+    hostname: hostname-redis
+    ports:
+      - "6379:6379"
