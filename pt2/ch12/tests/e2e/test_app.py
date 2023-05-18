@@ -38,9 +38,8 @@ async def test_happy_path_returns_202_and_batch_is_allocated(
     assert res.status_code == status.HTTP_202_ACCEPTED
 
     res = await client.get(f"/allocations/{orderid}")
-    # example 02
-    # assert {'batchref': earlybatch, 'sku': sku} in res.json()
-    assert res.json() == [{"sku": sku, "batchref": earlybatch}]
+    assert res.status_code == status.HTTP_200_OK
+    assert res.json() == [{"batchref": earlybatch, "sku": sku}]
 
 
 @pytest.mark.asyncio

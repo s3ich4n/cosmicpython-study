@@ -49,7 +49,6 @@ async def handle(
         uow: unit_of_work.AbstractUnitOfWork,
         channel: Optional[redis.AsyncRedis, None] = None,
 ):
-    results = []
     queue: List[Message] = [message]
     while queue:
         message = queue.pop(0)
@@ -57,12 +56,9 @@ async def handle(
         if isinstance(message, events.Event):
             await handle_event(message, queue, uow, channel)
         elif isinstance(message, commands.Command):
-            result = await handle_command(message, queue, uow)
-            results.append(result)
+            await handle_command(message, queue, uow)
         else:
             raise Exception(f'{message} was not a Command or Event')
-
-    return results
 
 
 async def handle_command(
@@ -73,9 +69,8 @@ async def handle_command(
     logger.debug(f'Handling command {command}')
     try:
         handler = MessageBus.COMMAND_HANDLERS[type(command)]
-        result = await handler(command, uow)
+        await handler(command, uow)
         queue.extend(uow.collect_new_events())
-        return result
     except Exception as ex:
         logger.exception(f'Exception handling {command}... detail: {ex}')
         raise

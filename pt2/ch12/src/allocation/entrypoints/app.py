@@ -49,11 +49,11 @@ async def add_batch_endpoint(
         qty=batch.qty,
         eta=batch.eta,
     )
-    results = await messagebus.handle(
-        event, uow=unit_of_work.SqlAlchemyUnitOfWork(db.session_factory),
+    await messagebus.handle(
+        event,
+        uow=unit_of_work.SqlAlchemyUnitOfWork(db.session_factory),
     )
-    batchref = results.pop(0)
-    return {'message': f'Batch added: {batchref}'}
+    return {'message': 'Batch added'}
 
 
 @app.post(
@@ -71,12 +71,11 @@ async def allocate_endpoint(
             sku=order_line.sku,
             qty=order_line.qty,
         )
-        batchref = await messagebus.handle(
+        await messagebus.handle(
             event,
             uow=unit_of_work.SqlAlchemyUnitOfWork(db.session_factory),
             channel=channel,
         )
-        batchref = batchref.pop(0)
 
     except (model.OutOfStock, handlers.InvalidSku) as e:
         raise HTTPException(
@@ -85,7 +84,7 @@ async def allocate_endpoint(
         ) from e
 
     else:
-        return {'batchref': batchref}
+        return {'message': 'allocated'}
 
 
 @app.get(
@@ -117,10 +116,9 @@ async def deallocate_endpoint(
             sku=order_line.sku,
             qty=order_line.qty,
         )
-        deallocated = await messagebus.handle(
+        await messagebus.handle(
             event, uow=unit_of_work.SqlAlchemyUnitOfWork(db.session_factory),
         )
-        deallocated = deallocated.pop(0)
 
     except (model.OutOfStock, handlers.InvalidSku) as e:
         raise HTTPException(
@@ -129,4 +127,4 @@ async def deallocate_endpoint(
         ) from e
 
     else:
-        return {"message": f"deallocation done. {deallocated}"}
+        return {"message": "deallocation done."}
