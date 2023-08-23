@@ -105,11 +105,11 @@ Evans에 따르면, 애그리게이트에는 원소에 대한 접근을 캡슐�
 
 기존에는, 주문 라인을 할당하고 싶으면 모든 `Batch` 객체를 살펴보고 이들을 `allocate()` 도메인 서비스에 전달했다.
 
-![도메인 서비스를 사용해 모든 배치를 할당]([https://www.cosmicpython.com/book/images/apwp_0702.png](https://www.cosmicpython.com/book/images/apwp_0702.png))
+![도메인 서비스를 사용해 모든 배치를 할당](https://www.cosmicpython.com/book/images/apwp_0702.png)
 
 앞으로는 `Product` 객체한테 일임할 것이다. 이 객체는 주문 라인에서 특정 SKU를 표현한다. Product 객체는 **자신이 담당하는 SKU**에 대한 **모든 배치**를 담당한다. `allocate()` 메소드를 `Product`에 대해 호출하도록 열어둘 것이다.
 
-![`Product` 를 추가. 이 객체가 관리하는 배치를 할당해달라고 요청]([https://www.cosmicpython.com/book/images/apwp_0703.png](https://www.cosmicpython.com/book/images/apwp_0703.png))
+![`Product` 를 추가. 이 객체가 관리하는 배치를 할당해달라고 요청](https://www.cosmicpython.com/book/images/apwp_0703.png)
 
 코드를 보자.
 
@@ -282,7 +282,7 @@ DB 수준에서 데이터 일관성을 강제할 수 있는 방법을 더 살펴
 
 한가지 답은 Product 모델 속성 하나를 사용해 전체 상태 변경이 완료되었는지 표시하고, 여러 동시성 작업자들이 이 속성을 획득하기 위해 경쟁하는 자원으로 활용하는 방법이다. 두 트랜잭션이 `batches` 에 대한 세계 상태를 동시에 읽고 둘 다 `allocation` 테이블을 업데이트 하려고 한다면, 각 트랜잭션이 `product_table` 에 있는 `version_number` 를 업데이트하도록 강제할 수 있다. 이러면 경쟁하는 트랜잭션 중 하나만 승리하고, 세계가 일관성 있게 남게 된다.
 
-![두 트랜잭션 예시:  `Product` 에 동시 업데이트를 시도하는 시퀀스 다이어그램]([https://www.cosmicpython.com/book/images/apwp_0704.png](https://www.cosmicpython.com/book/images/apwp_0704.png))
+![두 트랜잭션 예시:  `Product` 에 동시 업데이트를 시도하는 시퀀스 다이어그램](https://www.cosmicpython.com/book/images/apwp_0704.png)
 
 - 둘 다 버전 `3`을 가져간다
 - 모델에 allocate을 하면 버전 `4`를 담고있는 Product 객체가 생긴다
@@ -497,7 +497,7 @@ DEFAULT_SESSION_FACTORY = sessionmaker(
 
 아무리 예제를 베끼고 내가 짜야할 것들을 짜고 했지만 이걸 만들다니….
 
-![이겼다! 제 1부 끝!]([https://www.cosmicpython.com/book/images/apwp_0705.png](https://www.cosmicpython.com/book/images/apwp_0705.png))
+![이겼다! 제 1부 끝!](https://www.cosmicpython.com/book/images/apwp_0705.png)
 
 뭘 만들어낸건지 리뷰해보자.
 
@@ -525,7 +525,6 @@ DEFAULT_SESSION_FACTORY = sessionmaker(
 만약 만들 앱이 DB를 단순히 감싸는 CRUD wrapper 라면? 앞으로 이것 외의 일을 할 것 같지 않다면?
 
 ***이런 복잡한걸 쓸 필요가 없다*.**
-> 
 
 [^1]: 왠지 [이 책의 3장](http://www.yes24.com/Product/Goods/114667254)을 다시 읽어봐야할 것 같은 느낌이다. 저기서 본 내용들의 일부가 여기도 나온다. 
 
